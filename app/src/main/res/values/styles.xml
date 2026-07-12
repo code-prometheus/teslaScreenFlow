@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.TeslaScreenFlow" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">#E8212E</item>
+        <item name="colorPrimaryDark">#B81C26</item>
+        <item name="colorAccent">#E8212E</item>
+        <item name="android:statusBarColor">@color/status_bar</item>
+    </style>
+    <color name="status_bar">#B81C26</color>
+    <color name="tesla_red">#E8212E</color>
+    <color name="background_dark">#1A1A1A</color>
+</resources>
