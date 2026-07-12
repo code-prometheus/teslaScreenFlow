@@ -1,0 +1,6 @@
+{
+  "title": "feat: Implement WebRTC screen mirroring for Tesla Model 3 Highland",
+  "body": "## Summary\n\nThis PR implements the core teslaScreenFlow app - an Android application that streams the phone screen and system audio to a Tesla Model 3 Highland center display via WebRTC over local Wi-Fi.\n\n## Features\n\n- Screen Capture: MediaProjection foreground service capturing 1920x1080 @ 60fps\n- Audio Capture: AudioPlaybackCaptureConfiguration for system audio (OPUS)\n- WebRTC Streaming: H.264 4Mbps hardware encoding, STUN-based NAT traversal\n- Web Server: NanoHTTPD on port 8080 hosting the frontend page\n- Signaling: Java-WebSocket on port 8081 for SDP/ICE exchange\n- Touch Feedback: AccessibilityService dispatches touch gestures from car browser back to phone\n- Multi-client Ready: Signaling layer supports multiple clients (rear screen expansion)\n- CI/CD: GitHub Actions workflow for build and test\n\n## Architecture\n\nAndroid Phone (Offerer) <-> WebRTC (H.264 + OPUS) <-> Tesla Browser (Answerer)\n\n## Files\n\n24 files, 1917 lines of code including complete README with install guide and FAQ.\n\nGenerated with Claude Code",
+  "head": "feature/webrtc-tesla-screenflow",
+  "base": "main"
+}
