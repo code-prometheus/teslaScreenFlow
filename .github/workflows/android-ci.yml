@@ -5,18 +5,16 @@ on:
     branches: [ main ]
   push:
     branches: [ main ]
-  # 推送 tag 时触发 Release 构建
-  push_tags:
     tags:
       - 'v*'
 
 jobs:
-  # ============================================================
-  # PR / Push: 仅构建 Debug 版本 + 跑测试
-  # ============================================================
+  # ═══════════════════════════════════════════
+  # PR / Push to main: 构建 Debug + 测试
+  # ═══════════════════════════════════════════
   build:
     name: Build & Test
-    if: github.event_name != 'push_tags'
+    if: github.ref_type != 'tag'
     runs-on: ubuntu-latest
 
     steps:
@@ -44,12 +42,12 @@ jobs:
       - name: Lint check
         run: ./gradlew lintDebug
 
-  # ============================================================
-  # Tag Push: 构建 Release APK + 签名 + 创建 GitHub Release
-  # ============================================================
+  # ═══════════════════════════════════════════
+  # Tag push: 构建 Release APK + 签名 + GitHub Release
+  # ═══════════════════════════════════════════
   release:
     name: Build & Release
-    if: github.event_name == 'push_tags'
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -70,7 +68,6 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # ---------- 生成签名密钥 ----------
       - name: Generate keystore
         run: |
           keytool -genkey -v \
@@ -81,7 +78,6 @@ jobs:
             -keypass ${{ secrets.KEY_PASSWORD }} \
             -dname "CN=teslaScreenFlow, OU=Dev, O=teslaScreenFlow, L=Shanghai, ST=Shanghai, C=CN"
 
-      # ---------- 写入 keystore.properties ----------
       - name: Write keystore properties
         run: |
           echo "storeFile=tesla-screenflow.jks" > keystore.properties
@@ -89,19 +85,15 @@ jobs:
           echo "keyAlias=tesla-screenflow" >> keystore.properties
           echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> keystore.properties
 
-      # ---------- 构建 Release APK ----------
       - name: Build Release APK
         run: ./gradlew assembleRelease
 
-      # ---------- 获取版本号 ----------
       - name: Get version name
         id: version
         run: |
           TAG_NAME=${GITHUB_REF#refs/tags/}
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
-          echo "apk_path=app/build/outputs/apk/release/app-release.apk" >> $GITHUB_OUTPUT
 
-      # ---------- 创建 GitHub Release ----------
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -112,28 +104,28 @@ jobs:
 
             Android 手机端屏幕投屏 App，通过 WebRTC 将屏幕与音频实时串流至特斯拉焕新 Model 3 车机浏览器。
 
-            ### 📱 安装方式
+            ### 安装方式
 
             1. 下载 `app-release.apk`
             2. 在 Android 手机上打开 APK 文件
             3. 允许「未知来源」安装
             4. 安装完成后打开 App
 
-            ### 🚗 使用步骤
+            ### 使用步骤
 
             1. 手机开启 Wi-Fi 热点
             2. 车机连接手机热点
-            3. 打开 teslaScreenFlow → 点击「开始投屏」
+            3. 打开 teslaScreenFlow → 授权录屏
             4. 车机浏览器访问 `http://<手机IP>:8080`
 
-            ### ✨ 特性
+            ### 特性
 
-            - H.264 硬件编码 4Mbps 60fps 投屏
-            - OPUS 系统音频捕获 (< 150ms 延迟)
+            - H.264 硬件编码屏幕捕获
+            - OPUS 系统音频捕获
             - 车机触控回传操控手机
-            - 适配焕新 Model 3 中控 + 后排屏幕
+            - NanoWSD 单端口 HTTP + WebSocket 信令
 
-            ### 🔗 详细文档
+            ### 详细文档
 
             参见 [README.md](https://github.com/code-prometheus/teslaScreenFlow/blob/main/README.md)
           files: app/build/outputs/apk/release/app-release.apk
