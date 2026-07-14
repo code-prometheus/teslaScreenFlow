@@ -1,14 +1,12 @@
 package com.tesla.screenflow
 
 import android.app.Activity
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.media.projection.MediaProjectionManager
-import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
@@ -17,182 +15,183 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import java.net.Inet4Address
+import java.net.NetworkInterface
 
-/**
- * 主 Activity — 简单的控制界面，启动/停止投屏服务。
- */
 class MainActivity : AppCompatActivity() {
 
     companion object {
-        private const val TAG = "TeslaScreenFlow::MainActivity"
+        private const val TAG = "TeslaScreenFlow::Main"
         private const val REQUEST_CODE = 100
-        private const val TESLA_RED = 0xFFE8212E.toInt()
+        private const val RED = 0xFFE8212E.toInt()
     }
 
-    private lateinit var startButton: Button
     private lateinit var stopButton: Button
     private lateinit var statusText: TextView
     private lateinit var ipText: TextView
-    private lateinit var clientCountText: TextView
     private var isCapturing = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.i(TAG, "onCreate")
+        Log.i(TAG, "onCreate - auto-starting capture")
 
-        // 动态构建 UI
-        val rootLayout = LinearLayout(this).apply {
+        // 保持屏幕常亮
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        // 请求忽略电池优化
+        requestBatteryOptimizationExemption()
+
+        val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(48, 80, 48, 48)
             setBackgroundColor(0xFF1A1A1A.toInt())
         }
 
-        // 标题
-        rootLayout.addView(TextView(this).apply {
+        root.addView(TextView(this).apply {
             text = "teslaScreenFlow"
-            textSize = 28f
-            setTextColor(TESLA_RED)
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 16)
+            textSize = 28f; setTextColor(RED); gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 24)
         })
 
-        // IP 显示
         ipText = TextView(this).apply {
-            text = "服务器: 未启动"
-            textSize = 14f
-            setTextColor(0xFFAAAAAA.toInt())
-            gravity = Gravity.CENTER
+            text = "正在启动..."
+            textSize = 16f; setTextColor(0xFFFFFFFF.toInt()); gravity = Gravity.CENTER
             setPadding(0, 0, 0, 8)
         }
-        rootLayout.addView(ipText)
+        root.addView(ipText)
 
-        // 状态显示
         statusText = TextView(this).apply {
-            text = "未连接"
-            textSize = 16f
-            setTextColor(0xFFFFFFFF.toInt())
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 8)
-        }
-        rootLayout.addView(statusText)
-
-        // 客户端数
-        clientCountText = TextView(this).apply {
-            text = "已连接设备: 0"
-            textSize = 14f
-            setTextColor(0xFF888888.toInt())
-            gravity = Gravity.CENTER
+            text = "请求录屏权限中..."
+            textSize = 14f; setTextColor(0xFFAAAAAA.toInt()); gravity = Gravity.CENTER
             setPadding(0, 0, 0, 32)
         }
-        rootLayout.addView(clientCountText)
+        root.addView(statusText)
 
-        // 开始按钮
-        startButton = Button(this).apply {
-            text = getString(R.string.start_capture)
-            setBackgroundColor(TESLA_RED)
-            setTextColor(0xFFFFFFFF.toInt())
-            textSize = 18f
-            setPadding(48, 16, 48, 16)
-            setOnClickListener { startCapture() }
-        }
-        rootLayout.addView(startButton)
-
-        // 停止按钮
         stopButton = Button(this).apply {
-            text = getString(R.string.stop_capture)
-            setBackgroundColor(0xFF444444.toInt())
-            setTextColor(0xFFFFFFFF.toInt())
-            textSize = 18f
-            setPadding(48, 16, 48, 16)
-            isEnabled = false
+            text = "退出投屏"
+            setBackgroundColor(0xFF444444.toInt()); setTextColor(0xFFFFFFFF.toInt())
+            textSize = 18f; setPadding(48, 16, 48, 16); isEnabled = false
             setOnClickListener { stopCapture() }
         }
-        rootLayout.addView(stopButton)
+        root.addView(stopButton)
 
-        setContentView(rootLayout)
-
-        // 注册广播接收器（监听服务端连接状态）
+        setContentView(root)
         updateIPDisplay()
+
+        // 一键投屏：打开App立刻请求录屏权限
+        requestScreenCapture()
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-    }
-
-    private fun startCapture() {
+    private fun requestScreenCapture() {
         Log.i(TAG, "请求录屏权限...")
-
-        // 检查无障碍服务
-        if (!TouchSimulator.isEnabled()) {
-            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-            startActivity(intent)
-        }
-
-        val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        val intent = projectionManager.createScreenCaptureIntent()
-        startActivityForResult(intent, REQUEST_CODE)
+        val pm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        startActivityForResult(pm.createScreenCaptureIntent(), REQUEST_CODE)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        Log.i(TAG, "onActivityResult: req=$requestCode res=$resultCode data=${data != null}")
 
         if (requestCode != REQUEST_CODE || resultCode != Activity.RESULT_OK || data == null) {
-            Log.w(TAG, "录屏授权被拒绝或取消")
-            statusText.text = "录屏授权被拒绝"
+            Log.w(TAG, "录屏被拒绝")
+            statusText.text = "录屏被拒绝，请重新打开App"
             return
         }
 
-        Log.i(TAG, "录屏授权成功，启动前台服务...")
+        Log.i(TAG, "录屏授权成功，启动Service...")
 
-        val serviceIntent = Intent(this, ScreenCaptureService::class.java).apply {
+        // 静态变量传递
+        ScreenCaptureService.pendingResultCode = resultCode
+        ScreenCaptureService.pendingData = data
+
+        val intent = Intent(this, ScreenCaptureService::class.java).apply {
             action = ScreenCaptureService.ACTION_START
             putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, resultCode)
             putExtra(ScreenCaptureService.EXTRA_DATA, data)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            ContextCompat.startForegroundService(this, serviceIntent)
+            ContextCompat.startForegroundService(this, intent)
         } else {
-            startService(serviceIntent)
+            startService(intent)
         }
 
         isCapturing = true
-        startButton.isEnabled = false
         stopButton.isEnabled = true
+        stopButton.setBackgroundColor(RED)
         statusText.text = "投屏已启动"
         updateIPDisplay()
     }
 
     private fun stopCapture() {
         Log.i(TAG, "停止投屏")
-
-        val serviceIntent = Intent(this, ScreenCaptureService::class.java).apply {
+        val intent = Intent(this, ScreenCaptureService::class.java).apply {
             action = ScreenCaptureService.ACTION_STOP
         }
-        stopService(serviceIntent)
-
+        stopService(intent)
         isCapturing = false
-        startButton.isEnabled = true
         stopButton.isEnabled = false
+        stopButton.setBackgroundColor(0xFF444444.toInt())
         statusText.text = "已停止"
-        clientCountText.text = "已连接设备: 0"
         ipText.text = "服务器: 未启动"
     }
 
     private fun updateIPDisplay() {
         try {
-            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-            val wifiInfo = wifiManager.connectionInfo
-            val ipInt = wifiInfo.ipAddress
-            val ip = if (ipInt != 0) {
-                "${ipInt and 0xFF}.${(ipInt shr 8) and 0xFF}.${(ipInt shr 16) and 0xFF}.${(ipInt shr 24) and 0xFF}"
-            } else {
-                "未知"
-            }
-            ipText.text = "服务器: http://$ip:8080 | ws://$ip:8081"
+            val addr = findLocalIP()
+            ipText.text = "车机浏览器打开:\nhttp://$addr:8080"
         } catch (e: Exception) {
-            ipText.text = "服务器: 请连接Wi-Fi"
+            ipText.text = "请连接Wi-Fi或开启热点"
+        }
+    }
+
+    /**
+     * 查找本机局域网 IP。
+     * 优先热点地址 (192.168.43.x)，其次 WiFi (192.168.x.x / 10.x.x.x / 172.16-31.x.x)。
+     * 排除回环、虚拟网卡。
+     */
+    private fun findLocalIP(): String {
+        val candidates = mutableListOf<String>()
+        val ifaces = NetworkInterface.getNetworkInterfaces()
+        while (ifaces.hasMoreElements()) {
+            val iface = ifaces.nextElement()
+            if (!iface.isUp || iface.isLoopback) continue
+            val name = iface.name ?: ""
+            if (name.startsWith("docker") || name.startsWith("veth") ||
+                name.startsWith("tun") || name.startsWith("br-") ||
+                name.startsWith("virbr")) continue
+            val addrs = iface.inetAddresses
+            while (addrs.hasMoreElements()) {
+                val addr = addrs.nextElement()
+                if (addr is Inet4Address && !addr.isLoopbackAddress) {
+                    val ip = addr.hostAddress ?: continue
+                    if (ip.startsWith("192.168.43.")) return ip
+                    candidates.add(ip)
+                }
+            }
+        }
+        for (ip in candidates) {
+            if (ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("172.")) {
+                return ip
+            }
+        }
+        return if (candidates.isNotEmpty()) candidates.first() else "未知"
+    }
+
+    private fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                try {
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = android.net.Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Battery optimization request failed", e)
+                }
+            }
         }
     }
 }

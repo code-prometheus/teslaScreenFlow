@@ -20,7 +20,7 @@ html, body { width: 100vw; height: 100vh; margin: 0; background: #000; overflow:
 (function () {
     'use strict';
 
-    var WS_URL = 'ws://' + window.location.hostname + ':8081';
+    var WS_URL = 'ws://' + window.location.hostname + ':' + window.location.port;
     var ws = null;
     var pc = null;
     var reconnectTimer = null;
@@ -102,6 +102,14 @@ html, body { width: 100vw; height: 100vh; margin: 0; background: #000; overflow:
         pc.ontrack = function (event) {
             if (event.streams && event.streams[0]) {
                 videoEl.srcObject = event.streams[0];
+                setStatus('Connected', true);
+            }
+        };
+
+        // Plan B 兼容：onaddstream
+        pc.onaddstream = function (event) {
+            if (event.stream) {
+                videoEl.srcObject = event.stream;
                 setStatus('Connected', true);
             }
         };
