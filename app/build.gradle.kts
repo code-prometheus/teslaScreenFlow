@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,10 +8,10 @@ plugins {
 
 // 读取签名配置（CI 环境由 Action 生成，本地开发无此文件时跳过）
 val keystorePropertiesFile = rootProject.file("keystore.properties")
-val keystoreProperties = if (keystorePropertiesFile.exists()) {
-    java.util.Properties().apply { load(keystorePropertiesFile.inputStream()) }
-} else {
-    null
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        load(FileInputStream(keystorePropertiesFile))
+    }
 }
 
 android {
@@ -25,13 +28,14 @@ android {
     }
 
     // 签名配置（仅当 keystore.properties 存在时）
-    if (keystoreProperties != null) {
+    val hasKeystore = keystoreProperties.containsKey("storeFile")
+    if (hasKeystore) {
         signingConfigs {
             create("release") {
-                storeFile = rootProject.file(keystoreProperties["storeFile"] as String)
-                storePassword = keystoreProperties["storePassword"] as String
-                keyAlias = keystoreProperties["keyAlias"] as String
-                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
             }
         }
     }
@@ -43,8 +47,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // 使用签名配置（如果存在）
-            if (keystoreProperties != null) {
+            if (hasKeystore) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
@@ -66,13 +69,7 @@ android {
 
 dependencies {
     // WebRTC
-    implementation("org.webrtc:google-webrtc:1.0.32006")
-
-    // NanoHTTPD - lightweight HTTP server
-    implementation("org.nanohttpd:nanohttpd:2.3.1")
-
-    // Java-WebSocket - signaling channel
-    implementation("org.java-websocket:Java-WebSocket:1.5.3")
+    implementation("io.getstream:stream-webrtc-android:1.3.10")
 
     // AndroidX Core
     implementation("androidx.core:core-ktx:1.13.1")
