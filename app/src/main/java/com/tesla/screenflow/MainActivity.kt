@@ -140,7 +140,7 @@ class MainActivity : AppCompatActivity() {
     private fun updateIPDisplay() {
         try {
             val addr = findLocalIP()
-            ipText.text = "车机浏览器打开:\nhttp://$addr:8080"
+            ipText.text = "车机浏览器打开:\nhttp://prometheus.ai:8080\n($addr:8080)"
         } catch (e: Exception) {
             ipText.text = "请连接Wi-Fi或开启热点"
         }

@@ -44,6 +44,7 @@ class ScreenCaptureService : Service() {
     private var cachedOffer: String? = null
     private var webRTCManager: WebRTCManager? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var dnsServer: DnsServer? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -98,6 +99,7 @@ class ScreenCaptureService : Service() {
         try {
             startTeslaServer()
             Log.i(TAG, "TeslaServer started on port 8080")
+            startDnsServer()
         } catch (e: Exception) {
             Log.e(TAG, "TeslaServer failed", e)
         }
@@ -127,6 +129,10 @@ class ScreenCaptureService : Service() {
             wakeLock?.release()
         } catch (e: Exception) {}
         wakeLock = null
+        try {
+            dnsServer?.shutdown()
+        } catch (e: Exception) {}
+        dnsServer = null
         stopForeground(STOP_FOREGROUND_REMOVE)
     }
 
@@ -238,5 +244,27 @@ class ScreenCaptureService : Service() {
                 .setContentIntent(pi)
                 .setOngoing(true)
                 .build()
+    }
+
+    /**
+     * 启动简易 DNS 服务器，将 prometheus.ai 解析到本机 IP。
+     * 车机连接手机热点后，可通过 http://prometheus.ai:8080 访问。
+     */
+    private fun startDnsServer() {
+        try {
+            // 通过 NetworkInterface 找本机热点 IP
+            val ip = java.net.NetworkInterface.getNetworkInterfaces().asSequence()
+                .filter { it.isUp && !it.isLoopback }
+                .flatMap { it.inetAddresses.asSequence() }
+                .filter { it is java.net.Inet4Address && !it.isLoopbackAddress }
+                .map { it.hostAddress!! }
+                .firstOrNull { it.startsWith("192.168.") || it.startsWith("10.") }
+                ?: "192.168.43.1"
+            dnsServer = DnsServer(ip, "prometheus.ai")
+            dnsServer?.start()
+            Log.i(TAG, "DNS 服务器启动: prometheus.ai → $ip")
+        } catch (e: Exception) {
+            Log.e(TAG, "DNS 启动失败", e)
+        }
     }
 }
