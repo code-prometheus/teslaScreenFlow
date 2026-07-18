@@ -27,9 +27,9 @@ class ScreenJpegCapture(
 ) {
     companion object {
         private const val TAG = "TeslaScreenFlow::Jpeg"
-        private const val SHORT_SIDE = 540
-        private const val JPEG_QUALITY = 60
-        private const val MAX_IMAGES = 3
+        private const val SHORT_SIDE = 1080
+        private const val JPEG_QUALITY = 85
+        private const val MAX_IMAGES = 2
     }
 
     private var imageReader: ImageReader? = null
@@ -93,7 +93,7 @@ class ScreenJpegCapture(
                 val pixelStride = image.planes[0].pixelStride
                 val pad = rowStride - pixelStride * screenW
 
-                val bmp = Bitmap.createBitmap(screenW + pad / pixelStride, screenH, Bitmap.Config.RGB_565)
+                val bmp = Bitmap.createBitmap(screenW + pad / pixelStride, screenH, Bitmap.Config.ARGB_8888)
                 bmp.copyPixelsFromBuffer(buf)
                 val cropped = if (pad > 0) Bitmap.createBitmap(bmp, 0, 0, screenW, screenH) else bmp
 
