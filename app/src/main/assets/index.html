@@ -7,175 +7,74 @@
 <style>
 * { cursor: none; margin: 0; padding: 0; box-sizing: border-box; }
 html, body { width: 100vw; height: 100vh; margin: 0; background: #000; overflow: hidden; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
-#status { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); color: #fff; background: rgba(0,0,0,0.7); padding: 8px 16px; border-radius: 4px; font-family: sans-serif; font-size: 14px; z-index: 100; pointer-events: none; transition: opacity 0.5s ease; }
-#status.hidden { opacity: 0; }
-#remoteVideo { width: 100%; height: 100%; object-fit: contain; display: block; }
+#screen { width: 100%; height: 100%; object-fit: contain; display: block; }
+#screen.cover { object-fit: cover; }
 </style>
 </head>
 <body>
-<div id="status">Connecting...</div>
-<video id="remoteVideo" autoplay playsinline muted></video>
+<img id="screen" />
 
 <script>
 (function () {
-    'use strict';
+ 'use strict';
 
-    var WS_URL = 'ws://' + window.location.hostname + ':' + window.location.port;
-    var ws = null;
-    var pc = null;
-    var reconnectTimer = null;
-    var statusEl = document.getElementById('status');
-    var videoEl = document.getElementById('remoteVideo');
-    var hideStatusTimer = null;
+ var ws = null;
+ var screenEl = document.getElementById('screen');
 
-    function setStatus(text, autoHide) {
-        if (statusEl) {
-            statusEl.textContent = text;
-            statusEl.classList.remove('hidden');
-        }
-        if (hideStatusTimer) { clearTimeout(hideStatusTimer); hideStatusTimer = null; }
-        if (autoHide) {
-            hideStatusTimer = setTimeout(function () {
-                if (statusEl) statusEl.classList.add('hidden');
-            }, 3000);
-        }
-    }
+ function connect() {
+  if (ws) { ws.onclose = null; ws.onerror = null; ws.close(); }
+  ws = new WebSocket('ws://' + location.hostname + ':' + location.port);
+  ws.binaryType = 'arraybuffer';
 
-    // ── Touch events ──
-    function sendTouch(type, x, y) {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'touch', action: type, x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) }));
-        }
-    }
+  ws.onmessage = function (e) {
+   if (e.data instanceof ArrayBuffer) {
+    var blob = new Blob([e.data], { type: 'image/jpeg' });
+    var url = URL.createObjectURL(blob);
+    var img = new Image();
+    img.onload = function () {
+    screenEl.src = url;
+    // 始终 contain — 最大化显示不裁切
+    // 竖屏9:16在16:9屏幕上 = 左右黑边
+    // 横屏16:9在16:9屏幕上 = 全屏
+    screenEl.style.objectFit = 'contain';
+    screenEl.style.width = '100%';
+    screenEl.style.height = '100%';
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+   };
+    img.src = url;
+   }
+  };
 
-    function setupTouchEvents() {
-        var el = videoEl;
-        el.addEventListener('touchstart', function (e) {
-            e.preventDefault();
-            var rect = el.getBoundingClientRect();
-            var w = rect.width || el.offsetWidth;
-            var h = rect.height || el.offsetHeight;
-            for (var i = 0; i < e.changedTouches.length; i++) {
-                var t = e.changedTouches[i];
-                sendTouch('down', (t.clientX - rect.left) / w, (t.clientY - rect.top) / h);
-            }
-        }, { passive: false });
+  ws.onclose = function () { setTimeout(connect, 1000); };
+  ws.onerror = function () { ws.close(); };
+ }
 
-        el.addEventListener('touchmove', function (e) {
-            e.preventDefault();
-            var rect = el.getBoundingClientRect();
-            var w = rect.width || el.offsetWidth;
-            var h = rect.height || el.offsetHeight;
-            for (var i = 0; i < e.changedTouches.length; i++) {
-                var t = e.changedTouches[i];
-                sendTouch('move', (t.clientX - rect.left) / w, (t.clientY - rect.top) / h);
-            }
-        }, { passive: false });
+ // Touch → WebSocket
+ function sendTouch(type, x, y) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+   ws.send(JSON.stringify({ type: 'touch', action: type, x: x, y: y }));
+  }
+ }
 
-        el.addEventListener('touchend', function (e) {
-            e.preventDefault();
-            var rect = el.getBoundingClientRect();
-            var w = rect.width || el.offsetWidth;
-            var h = rect.height || el.offsetHeight;
-            for (var i = 0; i < e.changedTouches.length; i++) {
-                var t = e.changedTouches[i];
-                sendTouch('up', (t.clientX - rect.left) / w, (t.clientY - rect.top) / h);
-            }
-        }, { passive: false });
+ function setupTouch(el) {
+  el.addEventListener('touchstart', function (e) { e.preventDefault(); handleTouch(e, 'down'); }, { passive: false });
+  el.addEventListener('touchmove', function (e) { e.preventDefault(); handleTouch(e, 'move'); }, { passive: false });
+  el.addEventListener('touchend', function (e) { e.preventDefault(); handleTouch(e, 'up'); }, { passive: false });
+  el.addEventListener('touchcancel', function (e) { e.preventDefault(); handleTouch(e, 'up'); }, { passive: false });
+ }
 
-        el.addEventListener('touchcancel', function (e) {
-            e.preventDefault();
-            var rect = el.getBoundingClientRect();
-            var w = rect.width || el.offsetWidth;
-            var h = rect.height || el.offsetHeight;
-            for (var i = 0; i < e.changedTouches.length; i++) {
-                var t = e.changedTouches[i];
-                sendTouch('up', (t.clientX - rect.left) / w, (t.clientY - rect.top) / h);
-            }
-        }, { passive: false });
-    }
+ function handleTouch(e, action) {
+  var rect = screenEl.getBoundingClientRect();
+  var w = rect.width || screenEl.offsetWidth;
+  var h = rect.height || screenEl.offsetHeight;
+  for (var i = 0; i < e.changedTouches.length; i++) {
+   var t = e.changedTouches[i];
+   sendTouch(action, Math.min(1, Math.max(0, (t.clientX - rect.left) / w)), Math.min(1, Math.max(0, (t.clientY - rect.top) / h)));
+  }
+ }
 
-    // ── WebRTC ──
-    function initWebRTC() {
-        pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-
-        pc.ontrack = function (event) {
-            if (event.streams && event.streams[0]) {
-                videoEl.srcObject = event.streams[0];
-                setStatus('Connected', true);
-            }
-        };
-
-        // Plan B 兼容：onaddstream
-        pc.onaddstream = function (event) {
-            if (event.stream) {
-                videoEl.srcObject = event.stream;
-                setStatus('Connected', true);
-            }
-        };
-
-        pc.onicecandidate = function (event) {
-            if (event.candidate && ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'ice', candidate: event.candidate.candidate, sdpMid: event.candidate.sdpMid, sdpMLineIndex: event.candidate.sdpMLineIndex }));
-            }
-        };
-
-        pc.oniceconnectionstatechange = function () {
-            if (pc && pc.iceConnectionState === 'disconnected') { setStatus('ICE disconnected'); }
-        };
-    }
-
-    async function handleOffer(sdp) {
-        try {
-            if (!pc) initWebRTC();
-            await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: sdp }));
-            var answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            ws.send(JSON.stringify({ type: 'answer', sdp: answer.sdp }));
-        } catch (err) {
-            console.error('handleOffer error:', err);
-            setStatus('Error: ' + err.message);
-        }
-    }
-
-    async function handleIce(msg) {
-        try {
-            if (!pc) return;
-            await pc.addIceCandidate(new RTCIceCandidate({ candidate: msg.candidate, sdpMid: msg.sdpMid, sdpMLineIndex: msg.sdpMLineIndex }));
-        } catch (err) { console.error('addIceCandidate error:', err); }
-    }
-
-    // ── WebSocket ──
-    function connectWebSocket() {
-        if (ws) { ws.onclose = null; ws.onerror = null; ws.onmessage = null; ws.close(); ws = null; }
-        if (pc) { pc.close(); pc = null; }
-
-        setStatus('Connecting...');
-        ws = new WebSocket(WS_URL);
-
-        ws.onopen = function () { setStatus('Connected to signaling'); };
-
-        ws.onmessage = function (event) {
-            var msg;
-            try { msg = JSON.parse(event.data); } catch (e) { return; }
-            switch (msg.type) {
-                case 'offer': handleOffer(msg.sdp); break;
-                case 'ice': handleIce(msg); break;
-            }
-        };
-
-        ws.onclose = function () {
-            setStatus('Disconnected, reconnecting...');
-            if (reconnectTimer) clearTimeout(reconnectTimer);
-            reconnectTimer = setTimeout(connectWebSocket, 3000);
-        };
-
-        ws.onerror = function () { setStatus('Connection error'); ws.close(); };
-    }
-
-    // ── Start ──
-    setupTouchEvents();
-    connectWebSocket();
+ setupTouch(screenEl);
+ connect();
 })();
 </script>
 </body>

@@ -68,9 +68,6 @@ android {
 }
 
 dependencies {
-    // WebRTC
-    implementation("io.getstream:stream-webrtc-android:1.3.10")
-
     // AndroidX Core
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
