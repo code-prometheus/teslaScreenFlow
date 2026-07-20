@@ -58,6 +58,17 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    packaging {
+        resources {
+            excludes += setOf(
+                "META-INF/versions/9/OSGI-INF/MANIFEST.MF",
+                "META-INF/LICENSE.md",
+                "META-INF/LICENSE",
+                "META-INF/NOTICE.md"
+            )
+        }
+    }
+
     kotlinOptions {
         jvmTarget = "17"
     }
@@ -71,6 +82,13 @@ dependencies {
     // AndroidX Core
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
+
+    // OkHttp — HTTPS + SSL + DNS 映射
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp-dnsoverhttps:4.12.0")
+
+    // BouncyCastle — 自签名 SSL 证书
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.78")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

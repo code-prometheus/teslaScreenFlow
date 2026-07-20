@@ -8,7 +8,6 @@
 * { cursor: none; margin: 0; padding: 0; box-sizing: border-box; }
 html, body { width: 100vw; height: 100vh; margin: 0; background: #000; overflow: hidden; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
 #screen { width: 100%; height: 100%; object-fit: contain; display: block; }
-#screen.cover { object-fit: cover; }
 </style>
 </head>
 <body>
@@ -20,10 +19,12 @@ html, body { width: 100vw; height: 100vh; margin: 0; background: #000; overflow:
 
  var ws = null;
  var screenEl = document.getElementById('screen');
+ var proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+ var WS_URL = proto + location.hostname + ':' + location.port;
 
  function connect() {
   if (ws) { ws.onclose = null; ws.onerror = null; ws.close(); }
-  ws = new WebSocket('ws://' + location.hostname + ':' + location.port);
+  ws = new WebSocket(WS_URL);
   ws.binaryType = 'arraybuffer';
 
   ws.onmessage = function (e) {
@@ -31,16 +32,7 @@ html, body { width: 100vw; height: 100vh; margin: 0; background: #000; overflow:
     var blob = new Blob([e.data], { type: 'image/jpeg' });
     var url = URL.createObjectURL(blob);
     var img = new Image();
-    img.onload = function () {
-    screenEl.src = url;
-    // 始终 contain — 最大化显示不裁切
-    // 竖屏9:16在16:9屏幕上 = 左右黑边
-    // 横屏16:9在16:9屏幕上 = 全屏
-    screenEl.style.objectFit = 'contain';
-    screenEl.style.width = '100%';
-    screenEl.style.height = '100%';
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-   };
+    img.onload = function () { screenEl.src = url; setTimeout(function () { URL.revokeObjectURL(url); }, 1000); };
     img.src = url;
    }
   };
@@ -49,7 +41,6 @@ html, body { width: 100vw; height: 100vh; margin: 0; background: #000; overflow:
   ws.onerror = function () { ws.close(); };
  }
 
- // Touch → WebSocket
  function sendTouch(type, x, y) {
   if (ws && ws.readyState === WebSocket.OPEN) {
    ws.send(JSON.stringify({ type: 'touch', action: type, x: x, y: y }));
