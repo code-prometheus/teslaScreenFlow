@@ -17,6 +17,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
+import javax.net.ssl.SSLContext
 
 class ScreenCaptureService : Service() {
 
@@ -29,7 +30,7 @@ class ScreenCaptureService : Service() {
         const val ACTION_STOP = "com.tesla.screenflow.STOP_CAPTURE"
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_DATA = "data"
-        const val HTTP_PORT = 8080
+        const val HTTPS_PORT = 443
         private const val AUDIO_SAMPLE_RATE = 48000
         private const val AUDIO_CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_STEREO
         private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
@@ -44,6 +45,7 @@ class ScreenCaptureService : Service() {
     private var teslaServer: TeslaWebServer? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var jpegCapture: ScreenJpegCapture? = null
+    private var sslContext: SSLContext? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -78,7 +80,20 @@ class ScreenCaptureService : Service() {
 
     private fun startCaptureInternals(resultCode: Int, data: Intent?) {
         running = true
+
+        // 配置热点 IP + DNS
+        try {
+            HotspotConfig.configureHotspot(this)
+            HotspotConfig.setHotspotDns(this, HotspotConfig.HOTSPOT_IP)
+        } catch (e: Exception) {
+            Log.e(TAG, "Hotspot config failed", e)
+        }
+
+        // 生成 SSL 证书
+        sslContext = CertManager.getSslContext(this)
+
         startTeslaServer()
+
         if (resultCode != Activity.RESULT_OK || data == null) return
 
         try {
@@ -90,7 +105,7 @@ class ScreenCaptureService : Service() {
             jpegCapture?.start()
 
             initAudioCapture(mp)
-            Log.i(TAG, "Capture started")
+            Log.i(TAG, "Capture started on port $HTTPS_PORT")
         } catch (e: Exception) {
             Log.e(TAG, "Capture init failed", e)
         }
@@ -129,13 +144,13 @@ class ScreenCaptureService : Service() {
     }
 
     private fun startTeslaServer() {
-        teslaServer = TeslaWebServer(HTTP_PORT, applicationContext, object : TeslaWebServer.Callback {
+        teslaServer = TeslaWebServer(HTTPS_PORT, applicationContext, object : TeslaWebServer.Callback {
             override fun onTouchEvent(action: String, x: Float, y: Float) {
                 TouchSimulator.performTouch(action, x, y)
             }
-        })
+        }, sslContext)
         teslaServer?.start()
-        Log.i(TAG, "Server started on $HTTP_PORT")
+        Log.i(TAG, "HTTPS server started on $HTTPS_PORT")
     }
 
     private fun createNotificationChannel() {

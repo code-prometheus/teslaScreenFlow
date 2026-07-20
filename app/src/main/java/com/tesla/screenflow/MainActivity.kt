@@ -110,7 +110,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateIPDisplay() {
         val addr = findLocalIP()
-        ipText.text = "车机浏览器打开:\nhttp://$addr:8080"
+        ipText.text = "车机浏览器打开:\nhttps://code-prometheus.ai\n(或 http://$addr:8080)"
     }
 
     private fun findLocalIP(): String {
