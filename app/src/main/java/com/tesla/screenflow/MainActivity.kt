@@ -1,9 +1,12 @@
 package com.tesla.screenflow
 
 import android.app.Activity
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.media.projection.MediaProjectionManager
+import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
@@ -23,6 +26,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "TeslaScreenFlow::Main"
         private const val REQUEST_CODE = 100
+        private const val VPN_REQUEST = 200
         private const val RED = 0xFFE8212E.toInt()
     }
 
@@ -31,12 +35,31 @@ class MainActivity : AppCompatActivity() {
     private lateinit var ipText: TextView
     private var isCapturing = false
 
+    private var vpnGranted = false
+    private var minimizeReceiver: BroadcastReceiver? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.i(TAG, "onCreate")
 
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         requestBatteryOptimizationExemption()
+
+        // 注册最小化广播接收器
+        minimizeReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                moveTaskToBack(true)
+            }
+        }
+        registerReceiver(minimizeReceiver, IntentFilter("com.tesla.screenflow.MINIMIZE"), Context.RECEIVER_EXPORTED)
+
+        // 先请求 VPN（必须先拿到 VPN 权限才能后续启动）
+        val vpnIntent = VpnService.prepare(this)
+        if (vpnIntent != null) {
+            startActivityForResult(vpnIntent, VPN_REQUEST)
+        } else {
+            vpnGranted = true
+        }
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
@@ -69,7 +92,10 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(root)
         updateIPDisplay()
-        requestScreenCapture()
+
+        if (vpnGranted) {
+            requestScreenCapture()
+        }
     }
 
     private fun requestScreenCapture() {
@@ -79,6 +105,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == VPN_REQUEST) {
+            vpnGranted = resultCode == Activity.RESULT_OK
+            if (vpnGranted) {
+                requestScreenCapture()
+            } else {
+                statusText.text = "VPN 被拒绝，部分功能不可用"
+                // 继续允许录屏（即使 VPN 不工作）
+                requestScreenCapture()
+            }
+            return
+        }
         if (requestCode != REQUEST_CODE || resultCode != Activity.RESULT_OK || data == null) {
             statusText.text = "录屏被拒绝，请重新打开App"; return
         }
@@ -110,7 +147,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateIPDisplay() {
         val addr = findLocalIP()
-        ipText.text = "车机浏览器打开:\nhttps://code-prometheus.ai\n(或 http://$addr:8080)"
+        ipText.text = "车机浏览器打开:\nhttps://code-prometheus.ai:8080"
     }
 
     private fun findLocalIP(): String {
@@ -136,6 +173,13 @@ class MainActivity : AppCompatActivity() {
             if (ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("172.")) return ip
         }
         return if (candidates.isNotEmpty()) candidates.first() else "未知"
+    }
+
+    private fun requestVpnPermission() {
+        val intent = VpnService.prepare(this)
+        if (intent != null) {
+            startActivityForResult(intent, VPN_REQUEST)
+        }
     }
 
     private fun requestBatteryOptimizationExemption() {

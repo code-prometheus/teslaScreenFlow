@@ -83,11 +83,10 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
 
-    // OkHttp — HTTPS + SSL + DNS 映射
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:okhttp-dnsoverhttps:4.12.0")
+    // dnsjava — DNS 包解析
+    implementation("dnsjava:dnsjava:3.6.0")
 
-    // BouncyCastle — 自签名 SSL 证书
+    // BouncyCastle — 动态 SSL 证书签发
     implementation("org.bouncycastle:bcpkix-jdk18on:1.78")
 
     // Testing

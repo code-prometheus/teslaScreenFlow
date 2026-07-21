@@ -1,28 +1,18 @@
 package com.tesla.screenflow
 
 import android.content.Context
-import android.util.Log
 import fi.iki.elonen.NanoWSD
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.IOException
-import javax.net.ssl.SSLContext
 
 class TeslaWebServer(
     port: Int,
     private val context: Context,
-    private val callback: Callback,
-    sslContext: SSLContext? = null
+    private val callback: Callback
 ) : NanoWSD("0.0.0.0", port) {
 
     private var webSocket: NanoWSD.WebSocket? = null
-
-    init {
-        if (sslContext != null) {
-            makeSecure(sslContext.serverSocketFactory, null)
-            Log.i("TeslaScreenFlow::Server", "HTTPS enabled")
-        }
-    }
 
     interface Callback {
         fun onTouchEvent(action: String, x: Float, y: Float)
